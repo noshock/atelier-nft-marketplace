@@ -1,6 +1,6 @@
 import {
   ethers, wallet, readProvider, loadDeployment, deployment, nft, market, initWallet, connect,
-  switchNetwork, onWalletChange, hasInjectedWallet, isWrongNetwork, writable, syncClock, chainNow,
+  switchNetwork, onWalletChange, hasInjectedWallet, isWrongNetwork, isConnecting, writable, syncClock, chainNow,
   explainError, addressUrl,
 } from "./chain.js";
 import { $, $$, esc, eth, short, avatar, countdown, toast, runTx, openModal, closeModal, copy } from "./ui.js";
@@ -1191,10 +1191,18 @@ async function boot() {
   $("#connect-btn").onclick = async () => {
     if (wallet.account) return (location.hash = "#/profile");
     if (!hasInjectedWallet()) return window.open("https://metamask.io/download/", "_blank", "noopener");
+    const btn = $("#connect-btn");
+    if (isConnecting()) {
+      return toast("info", "Waiting for your wallet", "Click the MetaMask icon in your browser toolbar to approve the connection.");
+    }
+    const promise = connect();
+    btn.textContent = "Check your wallet…";
     try {
-      await connect();
+      await promise;
     } catch (err) {
-      toast("error", "Couldn't connect", esc(explainError(err)));
+      toast(err?.code === -32002 ? "info" : "error", err?.code === -32002 ? "Waiting for your wallet" : "Couldn't connect", esc(explainError(err)));
+    } finally {
+      renderChrome();
     }
   };
 

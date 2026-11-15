@@ -54,12 +54,24 @@ export async function initWallet() {
   await syncWallet(accounts);
 }
 
-export async function connect() {
-  if (!hasInjectedWallet()) throw new Error("NO_WALLET");
-  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-  await syncWallet(accounts);
-  if (isWrongNetwork()) await switchNetwork();
+// Only one wallet prompt at a time: repeated clicks share the request that's already open
+// instead of triggering MetaMask's "request already pending" error.
+let pendingConnect = null;
+export function connect() {
+  if (!hasInjectedWallet()) return Promise.reject(new Error("NO_WALLET"));
+  pendingConnect ??= (async () => {
+    try {
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      await syncWallet(accounts);
+      if (isWrongNetwork()) await switchNetwork();
+    } finally {
+      pendingConnect = null;
+    }
+  })();
+  return pendingConnect;
 }
+
+export const isConnecting = () => pendingConnect !== null;
 
 export async function switchNetwork() {
   const hex = "0x" + CHAIN_ID.toString(16);
@@ -102,6 +114,10 @@ export function explainError(err) {
   if (err?.message === "NOT_CONNECTED") return "Connect your wallet first.";
   if (err?.code === "ACTION_REJECTED" || err?.info?.error?.code === 4001 || err?.code === 4001) {
     return "You rejected the request in your wallet.";
+  }
+  // MetaMask already has a prompt open for this site (often hidden behind the browser window).
+  if (err?.code === -32002 || err?.info?.error?.code === -32002 || /already pending/i.test(err?.message ?? "")) {
+    return "Your wallet already has a request waiting. Click the MetaMask icon in your browser toolbar to finish it.";
   }
   const name = err?.revert?.name ?? decodeName(err);
   if (name && ERROR_MESSAGES[name]) return ERROR_MESSAGES[name];
