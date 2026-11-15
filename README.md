@@ -4,7 +4,7 @@ An NFT marketplace for independent artists, built with Solidity, Foundry and a h
 
 [![Tests](https://github.com/noshock/atelier-nft-marketplace/actions/workflows/test.yml/badge.svg)](https://github.com/noshock/atelier-nft-marketplace/actions/workflows/test.yml)
 
-**Live demo:** [nft.noshock.me](https://nft.noshock.me/) (Sepolia testnet; connect MetaMask and use free Sepolia ETH)
+**Live demo:** [nft.prajwalchitriv.me](https://nft.prajwalchitriv.me/) (Sepolia testnet; connect MetaMask and use free Sepolia ETH)
 
 | Contract (Sepolia) | Address |
 |---|---|
