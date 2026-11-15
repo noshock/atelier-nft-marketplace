@@ -2,13 +2,11 @@
 pragma solidity 0.8.24;
 
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
-import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MarketLib} from "./libraries/MarketLib.sol";
 
 /// @title Atelier Marketplace
 /// @notice A marketplace for any ERC-721 collection supporting:
@@ -21,8 +19,6 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///         pull-payment pattern: proceeds are credited and recipients call `withdraw()`. This means
 ///         a recipient that rejects ETH can never block a sale or an auction settlement.
 contract Marketplace is EIP712, Ownable, Pausable, ReentrancyGuard {
-    using ERC165Checker for address;
-
     // ---------------------------------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------------------------------
@@ -292,7 +288,7 @@ contract Marketplace is EIP712, Ownable, Pausable, ReentrancyGuard {
         if (nonceUsed[order.seller][order.nonce]) revert NonceAlreadyUsed();
 
         bytes32 digest = hashOrder(order);
-        if (!SignatureChecker.isValidSignatureNow(order.seller, digest, signature)) {
+        if (!MarketLib.isValidSignature(order.seller, digest, signature)) {
             revert InvalidSignature();
         }
 
@@ -430,7 +426,7 @@ contract Marketplace is EIP712, Ownable, Pausable, ReentrancyGuard {
         view
         returns (address royaltyReceiver, uint256 royalty, uint256 fee, uint256 sellerProceeds)
     {
-        (royaltyReceiver, royalty) = _royaltyInfo(nft, tokenId, price);
+        (royaltyReceiver, royalty) = MarketLib.royaltyInfo(nft, tokenId, price, MAX_ROYALTY_BPS);
         fee = (price * feeBps) / BPS;
         sellerProceeds = price - royalty - fee;
     }
@@ -498,23 +494,6 @@ contract Marketplace is EIP712, Ownable, Pausable, ReentrancyGuard {
         credits[seller] += sellerProceeds;
 
         emit Sale(nft, tokenId, seller, buyer, price, royaltyReceiver, royalty, fee);
-    }
-
-    /// @dev Reads ERC-2981 defensively: collections that don't implement it, revert, or ask for
-    ///      more than MAX_ROYALTY_BPS can never break or drain a sale.
-    function _royaltyInfo(address nft, uint256 tokenId, uint256 price)
-        internal
-        view
-        returns (address receiver, uint256 amount)
-    {
-        if (!nft.supportsInterface(type(IERC2981).interfaceId)) return (address(0), 0);
-        try IERC2981(nft).royaltyInfo(tokenId, price) returns (address r, uint256 a) {
-            if (r == address(0) || a == 0) return (address(0), 0);
-            uint256 cap = (price * MAX_ROYALTY_BPS) / BPS;
-            return (r, a > cap ? cap : a);
-        } catch {
-            return (address(0), 0);
-        }
     }
 
     function _requireOwnerAndApproved(address nft, uint256 tokenId, address owner) internal view {
