@@ -1,0 +1,17 @@
+{
+  "name": "atelier-marketplace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NFT marketplace with ERC-2981 royalties, Dutch & English auctions and gasless EIP-712 listings",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "chain": "anvil",
+    "deploy:local": "forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast",
+    "frontend": "npx --yes http-server@14.1.1 frontend -c-1"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "5.1.0"
+  }
+}
