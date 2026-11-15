@@ -10,23 +10,34 @@ import {Marketplace} from "../src/Marketplace.sol";
 /// @notice Deploys CreatorNFT + Marketplace and writes the addresses to frontend/deployments/<chainId>.json.
 ///
 /// Local:   forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
-///          (uses Anvil's first dev key and seeds demo artwork, listings and an auction)
-/// Sepolia: PRIVATE_KEY=0x... SEED=false forge script script/Deploy.s.sol \
-///          --rpc-url $SEPOLIA_RPC_URL --broadcast --verify
+///          (uses Anvil's first dev key and seeds demo artwork, listings and auctions)
+/// Sepolia: forge script script/Deploy.s.sol --rpc-url sepolia --account <keystore-name> --broadcast
+///          (signs with an encrypted Foundry keystore; seeds demo data at testnet-friendly prices)
 contract Deploy is Script {
     using Strings for uint256;
 
     // Anvil's default account #0 — a well-known public dev key, never use it on a real network.
     uint256 internal constant ANVIL_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
+    bool internal isLocal;
+
     function run() external {
-        uint256 key = vm.envOr("PRIVATE_KEY", ANVIL_KEY);
-        bool seed = vm.envOr("SEED", block.chainid == 31337);
+        isLocal = block.chainid == 31337;
+        bool seed = vm.envOr("SEED", true);
         uint256 feeBps = vm.envOr("FEE_BPS", uint256(250));
-        address deployer = vm.addr(key);
+
+        address deployer;
+        if (isLocal) {
+            uint256 key = vm.envOr("PRIVATE_KEY", ANVIL_KEY);
+            deployer = vm.addr(key);
+            vm.startBroadcast(key);
+        } else {
+            // Signer comes from --account (encrypted keystore) or --ledger; no raw keys in env vars.
+            deployer = msg.sender;
+            vm.startBroadcast();
+        }
         address feeRecipient = vm.envOr("FEE_RECIPIENT", deployer);
 
-        vm.startBroadcast(key);
         CreatorNFT nft = new CreatorNFT();
         Marketplace market = new Marketplace(feeRecipient, feeBps);
         if (seed) _seed(nft, market);
@@ -62,11 +73,13 @@ contract Deploy is Script {
             ids[i] = nft.mint(_tokenURI(titles[i], palettes[i], i), uint96(250 + i * 100));
         }
 
-        market.list(address(nft), ids[0], 0.08 ether);
-        market.list(address(nft), ids[1], 0.25 ether);
-        market.listDutch(address(nft), ids[2], 1 ether, 0.2 ether, 6 hours);
-        market.createAuction(address(nft), ids[3], 0.1 ether, 1 days);
-        market.createAuction(address(nft), ids[4], 0.3 ether, 2 days);
+        // Testnet visitors pay with faucet ETH, so public demos use prices 100x lower and longer timers.
+        uint256 u = isLocal ? 1 ether : 0.01 ether;
+        market.list(address(nft), ids[0], (u * 8) / 100);
+        market.list(address(nft), ids[1], (u * 25) / 100);
+        market.listDutch(address(nft), ids[2], u, (u * 20) / 100, isLocal ? 6 hours : 3 days);
+        market.createAuction(address(nft), ids[3], (u * 10) / 100, isLocal ? 1 days : 7 days);
+        market.createAuction(address(nft), ids[4], (u * 30) / 100, isLocal ? 2 days : 14 days);
         // ids[5] stays unlisted in the deployer's collection.
     }
 

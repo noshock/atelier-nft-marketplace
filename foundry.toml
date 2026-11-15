@@ -26,3 +26,6 @@ line_length = 110
 # Auction timing intentionally uses block.timestamp; validator skew (~seconds) is irrelevant at
 # 15-minute+ granularity.
 exclude_lints = ["block-timestamp"]
+
+[rpc_endpoints]
+sepolia = "https://ethereum-sepolia-rpc.publicnode.com"

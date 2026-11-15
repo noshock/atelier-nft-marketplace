@@ -49,7 +49,8 @@ async function loadAll() {
     Promise.all(range(1, Number(minted)).map(loadToken)),
     Promise.all(range(1, Number(listingCount)).map(async (id) => ({ id, ...plainListing(await market.listings(id)) }))),
     Promise.all(range(1, Number(auctionCount)).map(async (id) => ({ id, ...plainAuction(await market.auctions(id)) }))),
-    market.queryFilter(market.filters.Sale(), deployment.startBlock ?? 0),
+    // Public RPCs cap log-range queries; volume is nice-to-have, so never let it break the page.
+    market.queryFilter(market.filters.Sale(), deployment.startBlock ?? 0).catch(() => []),
   ]);
 
   state.tokens = new Map(tokens.map((t) => [t.id, t]));
@@ -234,6 +235,7 @@ function renderSetup() {
         <li>Deploy and seed demo artwork: <pre>forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast</pre></li>
         <li>In your wallet, import an Anvil test account (for example account #1) and switch to network <code>31337</code>.</li>
       </ol>
+      ${CHAIN_ID !== 31337 ? `<p class="hint">Looking for the local demo? <a href="?chain=31337">Switch to Anvil Local</a>.</p>` : ""}
       <button class="btn btn--primary" onclick="location.reload()">Reload</button>
     </div>`;
 }

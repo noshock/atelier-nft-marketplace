@@ -13,8 +13,10 @@ export const NETWORKS = {
   },
 };
 
+// Local dev servers talk to Anvil; the hosted site talks to Sepolia. `?chain=<id>` overrides either.
 const fromQuery = Number(new URLSearchParams(location.search).get("chain"));
-export const CHAIN_ID = NETWORKS[fromQuery] ? fromQuery : 31337;
+const isLocalHost = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+export const CHAIN_ID = NETWORKS[fromQuery] ? fromQuery : isLocalHost ? 31337 : 11155111;
 export const NETWORK = NETWORKS[CHAIN_ID];
 
 export const NFT_ABI = [
