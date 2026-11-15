@@ -2,6 +2,18 @@
 
 An NFT marketplace for independent artists, built with Solidity, Foundry and a hand-written frontend in plain JavaScript (no framework). Artists mint work with on-chain metadata and set their own royalty. Collectors can buy at a fixed price, buy in a declining-price (Dutch) auction, bid in a timed English auction, or buy through a gasless private sale link signed with EIP-712.
 
+[![Tests](https://github.com/noshock/atelier-nft-marketplace/actions/workflows/test.yml/badge.svg)](https://github.com/noshock/atelier-nft-marketplace/actions/workflows/test.yml)
+
+**Live demo:** [noshock.github.io/atelier-nft-marketplace](https://noshock.github.io/atelier-nft-marketplace/) (Sepolia testnet; connect MetaMask and use free Sepolia ETH)
+
+| Contract (Sepolia) | Address |
+|---|---|
+| Marketplace | [`0x2Bf043768E6AA5b287c47EDbC1232A0a05312146`](https://sepolia.etherscan.io/address/0x2Bf043768E6AA5b287c47EDbC1232A0a05312146) |
+| CreatorNFT | [`0xa97c4cc304f0ce63bB90ab4114f65E6Fa224BC45`](https://sepolia.etherscan.io/address/0xa97c4cc304f0ce63bB90ab4114f65E6Fa224BC45) |
+| MarketLib | [`0x2B096e96d361184F063f6c8650D848B2429C2052`](https://sepolia.etherscan.io/address/0x2B096e96d361184F063f6c8650D848B2429C2052) |
+
+All three are source-verified on [Sourcify](https://repo.sourcify.dev/11155111/0x2Bf043768E6AA5b287c47EDbC1232A0a05312146).
+
 ![Explore page](docs/explore.jpg)
 
 | Dutch auction with live price decay | Sell flow with live payout breakdown |
@@ -42,6 +54,7 @@ flowchart LR
 |---|---|
 | [`CreatorNFT.sol`](src/CreatorNFT.sol) | Open-edition ERC-721. The minter becomes the royalty receiver (0–10%). Supports `data:` URIs so artwork can be stored fully on-chain. |
 | [`Marketplace.sol`](src/Marketplace.sol) | Listings, Dutch and English auctions, signed orders, fee and royalty accounting, withdrawals, admin pause. Works with **any** ERC-721, not only `CreatorNFT`. |
+| [`MarketLib.sol`](src/libraries/MarketLib.sol) | Externally linked library: EIP-712/ERC-1271 signature checks and defensive ERC-2981 royalty lookup. |
 
 ### How a sale is split
 
@@ -64,6 +77,7 @@ Every party calls `withdraw()` to collect. A fuzz test proves the three parts al
 | **Overpayment is credited back** | Dutch prices fall every second, so buyers can send a small buffer safely. |
 | **Pause stops trading but never exits** | `cancelListing`, `cancelAuction`, `settleAuction` and `withdraw` work while paused, so users can always get their assets out. |
 | **Custom errors** everywhere | Cheaper than revert strings, and the frontend maps each one to a plain-language message. |
+| **Signature and royalty logic in a linked library, compiled with `via_ir`** | The first Sepolia deploy ran out of gas: contract creation on Sepolia now costs ~1,600 gas per byte of code, so the 12.6 KB Marketplace needed 20.3M gas, above the 16.78M per-transaction cap (EIP-7825). Moving self-contained logic into `MarketLib` and enabling the IR optimizer cut it to 9.8 KB, which deploys for 15.97M. |
 
 ## Security considerations
 
@@ -118,12 +132,19 @@ In your wallet:
 ## Deploy to Sepolia
 
 ```bash
-export PRIVATE_KEY=0x...          # a throwaway key funded with Sepolia ETH
-export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
-export ETHERSCAN_API_KEY=...
-SEED=false forge script script/Deploy.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify
+# One-time: store a throwaway key encrypted on disk (prompts for key + password)
+cast wallet import atelier-deployer --interactive
+
+# Deploy, seed demo data and write frontend/deployments/11155111.json
+forge script script/Deploy.s.sol --rpc-url sepolia --account atelier-deployer \
+  --sender <your-address> --evm-version amsterdam --gas-estimate-multiplier 105 --slow --broadcast
 ```
-The script writes the addresses to `frontend/deployments/11155111.json`. Open the frontend with `?chain=11155111`. You can host the `frontend/` folder on any static host (GitHub Pages, Vercel, Netlify).
+- `--evm-version amsterdam` makes Foundry's simulation use Sepolia's current gas schedule. With older rules it underestimates contract creation about 5×, and the deploy runs out of gas.
+- `--gas-estimate-multiplier 105` keeps the Marketplace's gas limit under the 16.78M per-transaction cap. The default 130% would exceed it.
+- `--slow` sends one transaction at a time and stops on the first failure.
+- Set `SEED=false` to deploy without demo data.
+
+Pushing `frontend/` to `main` publishes the site through the **Deploy frontend** workflow. When it's served from anywhere other than `localhost`, the site uses Sepolia automatically.
 
 ## Project structure
 
@@ -131,6 +152,7 @@ The script writes the addresses to `frontend/deployments/11155111.json`. Open th
 src/
   CreatorNFT.sol           ERC-721 + ERC-2981 collection
   Marketplace.sol          listings, auctions, signed orders, payouts
+  libraries/MarketLib.sol  linked library: signatures + royalty lookup
 test/
   Base.t.sol               shared fixtures
   CreatorNFT.t.sol
